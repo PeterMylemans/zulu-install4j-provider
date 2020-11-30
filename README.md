@@ -4,7 +4,7 @@ This project implements install4j's JdkProvider interface to automate downloadin
 
 ## To build
 
-Make sure that you have Java JDK version 11 or later installed
+Make sure you have Java JDK version 11 or later installed.
 ```
 ./mvnw clean package
 ```
