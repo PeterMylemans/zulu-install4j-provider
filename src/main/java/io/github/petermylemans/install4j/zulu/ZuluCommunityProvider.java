@@ -26,34 +26,55 @@ public class ZuluCommunityProvider implements JdkProvider {
     public Collection<? extends JdkNode> getReleases() {
         final Map<ZuluVersion, ZuluCommunityReleaseNode> releaseNodeMap = new TreeMap<>(Comparator.reverseOrder());
 
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.azul.com/zulu/download/community/v1.0/bundles/?bundle_type=jdk&release_status=ga&javafx=false"))
-                    .build();
-            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() == 200) {
-                final JSONArray jsonArray = new JSONArray(response.body());
-                for (Object o : jsonArray) {
-                    if (o instanceof JSONObject) {
-                        final JSONArray zuluVersionArray = ((JSONObject) o).getJSONArray("zulu_version");
-                        final JSONArray jdkVersionArray = ((JSONObject) o).getJSONArray("jdk_version");
-                        final ZuluCommunityReleaseNode jdkReleaseNode = releaseNodeMap.computeIfAbsent(new ZuluVersion(zuluVersionArray, jdkVersionArray), ZuluCommunityReleaseNode::new);
-                        jdkReleaseNode.addPlatform(((JSONObject) o).getString("url"));
-                    }
-                }
-            } else {
-                throw new IllegalStateException("Got a status code " + response.statusCode() + " for " + request.uri().toString());
+        final JSONArray jsonArray = getReleaseInfoFromApi();
+        for (final Object o : jsonArray) {
+            if (o instanceof JSONObject) {
+                final JSONArray zuluVersionArray = ((JSONObject) o).getJSONArray("zulu_version");
+                final JSONArray jdkVersionArray = ((JSONObject) o).getJSONArray("jdk_version");
+                final String url = ((JSONObject) o).getString("url");
+
+                final ZuluVersion zuluVersion = new ZuluVersion(zuluVersionArray);
+                final ZuluCommunityReleaseNode jdkReleaseNode = releaseNodeMap.computeIfAbsent(zuluVersion,
+                    ZuluCommunityReleaseNode::new);
+
+                jdkReleaseNode.setOpenJDKVersion(new OpenJDKVersion(jdkVersionArray));
+                jdkReleaseNode.addPlatform(url);
             }
-        } catch (IOException | InterruptedException e) {
-            throw new IllegalStateException("Could not parse the output from the API", e);
         }
 
-        releaseNodeMap.entrySet().removeIf(entry -> entry.getValue().getPlatforms().isEmpty());
+        return createCategoryTree(releaseNodeMap);
+    }
 
+    private JSONArray getReleaseInfoFromApi() {
+        try {
+            final HttpClient client = HttpClient.newHttpClient();
+            final HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.azul.com/zulu/download/community/v1.0/bundles/" +
+                    "?bundle_type=jdk&release_status=ga&javafx=false"))
+                .build();
+            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                return new JSONArray(response.body());
+            } else {
+                final String uri = request.uri().toString();
+                throw new IllegalStateException("Got a status code " + response.statusCode() + " for " + uri);
+            }
+        } catch (final IOException | InterruptedException e) {
+            throw new IllegalStateException("Could not parse the output from the API", e);
+        }
+    }
+
+    /**
+     * Creates a category tree with major zulu versions as nodes (e.g. zulu11) and actual versions as the leaves.
+     */
+    private List<JdkCategoryNode> createCategoryTree(final Map<ZuluVersion, ZuluCommunityReleaseNode> releaseNodeMap) {
         final List<JdkCategoryNode> result = new ArrayList<>();
         ZuluCommunityCategory currentCategory = null;
-        for (ZuluCommunityReleaseNode releaseNode : releaseNodeMap.values()) {
+        for (final ZuluCommunityReleaseNode releaseNode : releaseNodeMap.values()) {
+            if (releaseNode.getPlatforms().isEmpty()) {
+                continue;
+            }
+
             if (currentCategory == null || releaseNode.getVersion().getMajor() != currentCategory.getMajorVersion()) {
                 currentCategory = new ZuluCommunityCategory(releaseNode.getVersion().getMajor());
                 result.add(currentCategory);
@@ -66,35 +87,48 @@ public class ZuluCommunityProvider implements JdkProvider {
     }
 
     @Override
-    public JdkReleaseNode getByConfigKey(String configKey) {
+    public JdkReleaseNode getByConfigKey(final String configKey) {
         final ZuluCommunityReleaseNode jdkReleaseNode = new ZuluCommunityReleaseNode(new ZuluVersion(configKey));
+        final ZuluVersion zuluVersion = jdkReleaseNode.getVersion();
 
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.azul.com/zulu/download/community/v1.0/bundles/?bundle_type=jdk&release_status=ga&javafx=false&zulu_version=" + jdkReleaseNode.getVersion().getZuluVersion()))
-                .build();
+        final HttpClient client = HttpClient.newHttpClient();
+        final HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(
+                "https://api.azul.com/zulu/download/community/v1.0/bundles/" +
+                    "?bundle_type=jdk&release_status=ga&javafx=false&zulu_version=" + zuluVersion.asExactString()))
+            .build();
 
         try {
             final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 final JSONArray jsonArray = new JSONArray(response.body());
-                for (Object o : jsonArray) {
+                for (final Object o : jsonArray) {
                     if (o instanceof JSONObject) {
-                        jdkReleaseNode.addPlatform(((JSONObject) o).getString("url"));
+                        final JSONArray jdkVersionArray = ((JSONObject) o).getJSONArray("jdk_version");
+                        final String url = ((JSONObject) o).getString("url");
+                        
+                        jdkReleaseNode.setOpenJDKVersion(new OpenJDKVersion(jdkVersionArray));
+                        jdkReleaseNode.addPlatform(url);
                     }
                 }
             } else {
-                throw new IllegalStateException("Got a status code " + response.statusCode() + " for " + request.uri().toString());
+                final String uri = request.uri().toString();
+                throw new IllegalStateException("Got a status code " + response.statusCode() + " for " + uri);
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (final IOException | InterruptedException e) {
             throw new IllegalStateException("Could not parse the output from the API", e);
         }
 
         return jdkReleaseNode;
     }
 
+    /**
+     * Removes first directory as the archive prefix.
+     * <p>
+     * On some platforms (such as MacOS) an additional zuluXX directory is added, which also needs to be skipped.
+     */
     @Override
-    public File removeArchivePrefix(File relativeFile, String release, String platform) {
+    public File removeArchivePrefix(final File relativeFile, final String release, final String platform) {
         final String path = relativeFile.getPath().replace(File.separatorChar, '/');
         final int firstDir = path.indexOf('/');
         if (firstDir < 0) {

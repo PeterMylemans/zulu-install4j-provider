@@ -15,9 +15,10 @@ public class ZuluCommunityReleaseNode implements JdkReleaseNode {
     }
 
     private final ZuluVersion version;
+    private OpenJDKVersion openJDKVersion;
     private final Map<String, String> platformDownloads = new TreeMap<>();
 
-    void addPlatform(String url) {
+    void addPlatform(final String url) {
         if (url.endsWith("macosx.tar.gz") || url.endsWith("macosx_x64.tar.gz")) {
             platformDownloads.put("macos-amd64", url);
         } else if (url.endsWith("win64.zip") || url.endsWith("win_x64.zip")) {
@@ -25,24 +26,33 @@ public class ZuluCommunityReleaseNode implements JdkReleaseNode {
         } else if (url.endsWith("win_i686.zip")) {
             platformDownloads.put("windows-x86", url);
         } else if (url.endsWith("macosx_x64.zip")) {
+            // Only add it if no tar.gz
             platformDownloads.putIfAbsent("macos-amd64", url);
         }
     }
 
+    public OpenJDKVersion getOpenJDKVersion() {
+        return openJDKVersion;
+    }
+
+    public void setOpenJDKVersion(final OpenJDKVersion openjdkVersion) {
+        this.openJDKVersion = openjdkVersion;
+    }
+
     @Override
-    public String getDownloadUrl(String platform) {
+    public String getDownloadUrl(final String platform) {
         return platformDownloads.get(platform);
     }
 
     @Override
-    public String getFileName(String platform) {
+    public String getFileName(final String platform) {
         final String downloadUrl = getDownloadUrl(platform);
         return downloadUrl != null ? Paths.get(downloadUrl).getFileName().toString() : null;
     }
 
     @Override
     public String getConfigKey() {
-        return version.toConfigKey();
+        return version.toString();
     }
 
     @Override
@@ -52,7 +62,7 @@ public class ZuluCommunityReleaseNode implements JdkReleaseNode {
 
     @Override
     public String getDisplayName() {
-        return getConfigKey();
+        return "Zulu " + getVersion() + " (OpenJDK " + getOpenJDKVersion() + ")";
     }
 
     public ZuluVersion getVersion() {
