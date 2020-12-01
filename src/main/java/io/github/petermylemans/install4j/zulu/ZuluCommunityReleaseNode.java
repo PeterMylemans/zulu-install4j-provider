@@ -28,6 +28,10 @@ public class ZuluCommunityReleaseNode implements JdkReleaseNode {
         } else if (url.endsWith("macosx_x64.zip")) {
             // Only add it if no tar.gz
             platformDownloads.putIfAbsent("macos-amd64", url);
+        } else if (url.endsWith("linux_x64.tar.gz")) {
+            platformDownloads.put("linux-amd64", url);
+        } else if (url.endsWith("linux_aarch64.tar.gz")) {
+            platformDownloads.put("linux-aarch64", url);
         }
     }
 

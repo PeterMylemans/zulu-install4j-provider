@@ -106,7 +106,7 @@ public class ZuluCommunityProvider implements JdkProvider {
                     if (o instanceof JSONObject) {
                         final JSONArray jdkVersionArray = ((JSONObject) o).getJSONArray("jdk_version");
                         final String url = ((JSONObject) o).getString("url");
-                        
+
                         jdkReleaseNode.setOpenJDKVersion(new OpenJDKVersion(jdkVersionArray));
                         jdkReleaseNode.addPlatform(url);
                     }
