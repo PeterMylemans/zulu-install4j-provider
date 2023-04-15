@@ -1,4 +1,6 @@
-# Azul Zulu Community Provider
+# Azul Zulu Community Provider (deprecated)
+
+> **IMPORTANT:** This repository is now archived as similar functionality is now builtin when using more recent versions of install4j. See https://www.ej-technologies.com/resources/install4j/help/doc/concepts/jreBundles.html
 
 This project implements install4j's JdkProvider interface to automate downloading and packaging JRE bundles into your installers.
 
